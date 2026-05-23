@@ -23,11 +23,17 @@ An ultra-precise, real-time multi-agent token and cost ledger built for **OpenCo
 
 To copy the plugin and safely register it in your `opencode.json` / `opencode.jsonc` configs without breaking existing plugins:
 
-### Automated Local Installer (Recommended)
-Run the script to copy the plugin to your global settings folder and automatically register `./plugins/ledger.ts` under your `"plugin"` configuration array:
+### One-Click Installer (Recommended)
+You can install and configure the plugin directly from the terminal without manual cloning.
 
+#### Stable Release (Main)
 ```bash
-sh install.sh
+curl -fsSL https://raw.githubusercontent.com/notfixingit3/ledger/main/install.sh | sh
+```
+
+#### Development Release (Dev)
+```bash
+curl -fsSL https://raw.githubusercontent.com/notfixingit3/ledger/dev/install.sh | sh
 ```
 
 > [!TIP]

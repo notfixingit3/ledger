@@ -1,4 +1,4 @@
-<p align="center"><img src="./assets/logo.png" width="220" alt="OpenCode Ledger" /></p>
+<p align="center"><img src="./assets/logo.png" width="360" alt="OpenCode Ledger" /></p>
 
 # 📊 OpenCode Ledger
 

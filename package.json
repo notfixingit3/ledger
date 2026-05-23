@@ -1,0 +1,14 @@
+{
+  "name": "opencode-ledger",
+  "version": "0.1.0",
+  "description": "Multi-agent usage tracker for OpenCode (by agent + provider + model)",
+  "main": "index.ts",
+  "type": "module",
+  "license": "MIT",
+  "dependencies": {
+    "@opencode-ai/plugin": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1"
+  }
+}

@@ -1,3 +1,5 @@
+<p align="center"><img src="./assets/logo.png" width="220" alt="OpenCode Ledger" /></p>
+
 # 📊 OpenCode Ledger
 
 [![OpenCode Engine](https://img.shields.io/badge/OpenCode-2026.5-6366f1?style=for-the-badge&logo=openai&logoColor=white)](https://opencode.ai)

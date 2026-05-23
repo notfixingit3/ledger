@@ -1,11 +1,13 @@
-<p align="center"><img src="./assets/logo.png" width="360" alt="OpenCode Ledger" /></p>
+<p align="center"><img src="./assets/logo.png" width="260" alt="OpenCode Ledger" /></p>
 
-# 📊 OpenCode Ledger
+<h1 align="center">📊 OpenCode Ledger</h1>
 
-[![OpenCode Engine](https://img.shields.io/badge/OpenCode-2026.5-6366f1?style=for-the-badge&logo=openai&logoColor=white)](https://opencode.ai)
-[![Build Status](https://img.shields.io/badge/Build-Passing-10b981?style=for-the-badge)](#)
-[![License](https://img.shields.io/badge/License-MIT-f59e0b?style=for-the-badge)](LICENSE)
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/notfixingit)
+<p align="center">
+  <a href="https://opencode.ai"><img src="https://img.shields.io/badge/OpenCode-2026.5-6366f1?style=for-the-badge&logo=openai&logoColor=white" alt="OpenCode Engine" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/Build-Passing-10b981?style=for-the-badge" alt="Build Status" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-f59e0b?style=for-the-badge" alt="License" /></a>
+  <a href="https://buymeacoffee.com/notfixingit"><img src="https://img.shields.io/badge/Buy_Me_A_Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee" /></a>
+</p>
 
 An ultra-precise, real-time multi-agent token and cost ledger built for **OpenCode 2026**. Designed specifically for parallel agent workflows (e.g. `oh-my-openagent`) where specialized subagents execute model calls dynamically across multiple API providers.
 

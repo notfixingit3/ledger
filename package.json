@@ -1,6 +1,6 @@
 {
   "name": "opencode-ledger",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Multi-agent usage tracker for OpenCode (by agent + provider + model)",
   "main": "index.ts",
   "type": "module",

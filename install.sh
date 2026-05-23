@@ -7,7 +7,7 @@ DEST_FILE="$DEST_DIR/ledger.ts"
 RAW_URL="https://raw.githubusercontent.com/notfixingit3/ledger/dev/index.ts"
 
 echo "============================================="
-echo "   OpenCode Ledger Plugin Installer v0.0.3"
+echo "   OpenCode Ledger Plugin Installer v0.0.4"
 echo "============================================="
 echo ""
 
@@ -179,7 +179,8 @@ function ledgerCommandEntry(indent) {
   return [
     indent + '"ledger": {',
     indent + '  "template": ' + quoted(ledgerCommandTemplate) + ',',
-    indent + '  "description": "Show multi-agent token and cost ledger"',
+    indent + '  "description": "Show multi-agent token and cost ledger",',
+    indent + '  "subtask": true',
     indent + '}',
   ].join('\n');
 }
@@ -244,6 +245,7 @@ if (existingConfigs.length === 0) {
       ledger: {
         template: ledgerCommandTemplate,
         description: 'Show multi-agent token and cost ledger',
+        subtask: true,
       },
     },
   }, null, 2) + '\n';
@@ -282,7 +284,8 @@ else
   echo "  \"command\": {"
   echo "    \"ledger\": {"
   echo "      \"template\": \"Use ledger tool. Return only output.\","
-  echo "      \"description\": \"Show multi-agent token and cost ledger\""
+  echo "      \"description\": \"Show multi-agent token and cost ledger\","
+  echo "      \"subtask\": true"
   echo "    }"
   echo "  }"
   echo ""

@@ -52,7 +52,8 @@ curl -fsSL https://raw.githubusercontent.com/notfixingit3/ledger/dev/install.sh 
   "command": {
     "ledger": {
       "template": "Use ledger tool. Return only output.",
-      "description": "Show multi-agent token and cost ledger"
+      "description": "Show multi-agent token and cost ledger",
+      "subtask": true
     }
   }
 }

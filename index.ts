@@ -13,7 +13,7 @@ interface UsageEntry {
 
 export const AgentLedger: Plugin = async ({ client }) => {
   let sessionUsage = new Map<string, UsageEntry>(); // key: "agent::provider:model"
-  let messageUsage = new Map<string, { prompt: number; completion: number }>();
+  let messageUsage = new Map<string, { prompt: number; completion: number; cost: number }>();
 
   // ── Pricing map (edit these prices whenever you want) ──
   const defaultPrice = { input: 0.000005, output: 0.000015 };
@@ -38,7 +38,7 @@ export const AgentLedger: Plugin = async ({ client }) => {
     return `${agent}::${provider}:${model}`;
   }
 
-  function updateUsage(agent: string, provider: string, model: string, prompt: number, completion: number, isNewCall: boolean) {
+  function updateUsage(agent: string, provider: string, model: string, prompt: number, completion: number, isNewCall: boolean, actualCost?: number) {
     const key = getKey(agent, provider, model);
     let entry = sessionUsage.get(key);
     if (!entry) {
@@ -47,7 +47,7 @@ export const AgentLedger: Plugin = async ({ client }) => {
     }
 
     const price = getPrice(provider, model);
-    const cost = prompt * price.input + completion * price.output;
+    const cost = actualCost ?? (prompt * price.input + completion * price.output);
 
     entry.promptTokens += prompt;
     entry.completionTokens += completion;
@@ -119,51 +119,96 @@ export const AgentLedger: Plugin = async ({ client }) => {
     return output;
   }
 
-  return {
-    "session.created": async () => {
-      sessionUsage.clear();
-      messageUsage.clear();
-      await client.app.log?.({ body: { service: "ledger", level: "info", message: "New session started → Ledger reset" } });
-    },
+  async function resetLedger() {
+    sessionUsage.clear();
+    messageUsage.clear();
+    await client.app.log?.({ body: { service: "ledger", level: "info", message: "New session started → Ledger reset" } });
+  }
 
-    "message.updated": async ({ message }: { message: any }) => {
-      if (message?.role !== "assistant") return;
+  async function recordMessageUpdate(event: Record<string, unknown>) {
+    const properties = (event.properties as Record<string, unknown> | undefined) || event;
+    const message = (properties.info || properties.message) as Record<string, unknown> | undefined;
+    if (message?.role !== "assistant") return;
 
-      const agent = message.metadata?.agent || message.agentName || message.agent || message.source?.agent || "Unknown-Agent";
-      
-      let provider = "unknown";
-      if (typeof message.provider === "string") {
-        provider = message.provider;
-      } else if (message.model && typeof message.model === "object" && typeof message.model.provider === "string") {
-        provider = message.model.provider;
-      }
+    const metadata = message.metadata as Record<string, unknown> | undefined;
+    const source = message.source as Record<string, unknown> | undefined;
+    const agent = String(metadata?.agent || message.agentName || message.agent || source?.agent || "Unknown-Agent");
 
-      let model = "unknown";
-      if (typeof message.model === "string") {
-        model = message.model;
-      } else if (message.model && typeof message.model === "object") {
-        model = message.model.name || message.model.id || JSON.stringify(message.model);
-      }
+    let provider = "unknown";
+    if (typeof message.provider === "string") {
+      provider = message.provider;
+    } else if (typeof message.providerID === "string") {
+      provider = message.providerID;
+    } else if (message.model && typeof message.model === "object" && typeof (message.model as Record<string, unknown>).provider === "string") {
+      provider = String((message.model as Record<string, unknown>).provider);
+    } else if (message.model && typeof message.model === "object" && typeof (message.model as Record<string, unknown>).providerID === "string") {
+      provider = String((message.model as Record<string, unknown>).providerID);
+    }
 
-      const usage = message.usage || message.tokenUsage || message._usage;
-      const prompt = usage?.prompt_tokens ?? usage?.promptTokens;
-      const completion = usage?.completion_tokens ?? usage?.completionTokens;
+    let model = "unknown";
+    if (typeof message.model === "string") {
+      model = message.model;
+    } else if (typeof message.modelID === "string") {
+      model = message.modelID;
+    } else if (message.model && typeof message.model === "object") {
+      const modelObject = message.model as Record<string, unknown>;
+      model = String(modelObject.name || modelObject.id || modelObject.modelID || JSON.stringify(modelObject));
+    }
 
-      if (prompt != null && completion != null && message.id) {
-        const lastUsage = messageUsage.get(message.id);
+    const usage = message.usage || message.tokenUsage || message._usage;
+    const tokens = message.tokens as Record<string, unknown> | undefined;
+    const cache = tokens?.cache as Record<string, unknown> | undefined;
 
-        if (!lastUsage) {
-          updateUsage(agent, provider, model, prompt, completion, true);
-          messageUsage.set(message.id, { prompt, completion });
-        } else {
-          const diffPrompt = prompt - lastUsage.prompt;
-          const diffCompletion = completion - lastUsage.completion;
-          if (diffPrompt > 0 || diffCompletion > 0) {
-            updateUsage(agent, provider, model, diffPrompt, diffCompletion, false);
-            messageUsage.set(message.id, { prompt, completion });
-          }
+    const prompt = usage && typeof usage === "object"
+      ? (usage as Record<string, unknown>).prompt_tokens ?? (usage as Record<string, unknown>).promptTokens
+      : typeof tokens?.input === "number"
+        ? tokens.input + (typeof cache?.read === "number" ? cache.read : 0) + (typeof cache?.write === "number" ? cache.write : 0)
+        : undefined;
+
+    const completion = usage && typeof usage === "object"
+      ? (usage as Record<string, unknown>).completion_tokens ?? (usage as Record<string, unknown>).completionTokens
+      : typeof tokens?.output === "number"
+        ? tokens.output + (typeof tokens.reasoning === "number" ? tokens.reasoning : 0)
+        : undefined;
+
+    if (typeof prompt === "number" && typeof completion === "number" && typeof message.id === "string") {
+      const messageCost = typeof message.cost === "number" ? message.cost : 0;
+      if (prompt <= 0 && completion <= 0 && messageCost <= 0) return;
+
+      const lastUsage = messageUsage.get(message.id);
+
+      if (!lastUsage) {
+        updateUsage(agent, provider, model, prompt, completion, true, messageCost);
+        messageUsage.set(message.id, { prompt, completion, cost: messageCost });
+      } else {
+        const diffPrompt = prompt - lastUsage.prompt;
+        const diffCompletion = completion - lastUsage.completion;
+        const diffCost = messageCost - lastUsage.cost;
+        if (diffPrompt > 0 || diffCompletion > 0 || diffCost > 0) {
+          updateUsage(agent, provider, model, Math.max(diffPrompt, 0), Math.max(diffCompletion, 0), false, Math.max(diffCost, 0));
+          messageUsage.set(message.id, { prompt, completion, cost: messageCost });
         }
       }
+    }
+  }
+
+  return {
+    event: async ({ event }: { event: Record<string, unknown> }) => {
+      if (event.type === "session.created") {
+        await resetLedger();
+      } else if (event.type === "message.updated") {
+        await recordMessageUpdate(event);
+      } else if (event.type === "session.idle") {
+        await showCompactToast();
+      }
+    },
+
+    "session.created": async () => {
+      await resetLedger();
+    },
+
+    "message.updated": async (event: Record<string, unknown>) => {
+      await recordMessageUpdate(event);
     },
 
     "session.idle": async () => {
@@ -181,4 +226,3 @@ export const AgentLedger: Plugin = async ({ client }) => {
     },
   };
 };
-

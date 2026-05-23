@@ -37,18 +37,24 @@ curl -fsSL https://raw.githubusercontent.com/notfixingit3/ledger/dev/install.sh 
 ```
 
 > [!TIP]
-> The automated installer safely handles JSON and JSONC files (retaining formatting and comments) and will gracefully add the plugin without overriding existing active plugins.
+> The automated installer handles JSON and JSONC configs, creates a backup before editing, and adds the plugin without overriding existing active plugins.
 
 ### Manual Configuration
-1. Copy [index.ts](./index.ts) to `~/.config/opencode/plugins/ledger.ts` (global) or `.opencode/plugins/ledger.ts` (project-local).
-2. Add `"./plugins/ledger.ts"` to your `"plugin"` array inside `opencode.json` or `opencode.jsonc`:
+1. Copy [index.ts](./index.ts) to `~/.config/opencode/plugins/ledger.ts`.
+2. Add the installed file URL and `/ledger` command to `~/.config/opencode/config.json` or `config.jsonc`:
 
 ```jsonc
 {
   "plugin": [
     "oh-my-openagent@latest",
-    "./plugins/ledger.ts" // Added locally
-  ]
+    "file:///Users/you/.config/opencode/plugins/ledger.ts"
+  ],
+  "command": {
+    "ledger": {
+      "template": "Use ledger tool. Return only output.",
+      "description": "Show multi-agent token and cost ledger"
+    }
+  }
 }
 ```
 

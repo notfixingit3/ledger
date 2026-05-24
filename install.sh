@@ -7,7 +7,7 @@ DEST_FILE="$DEST_DIR/ledger.ts"
 RAW_URL="https://raw.githubusercontent.com/notfixingit3/ledger/dev/index.ts"
 
 echo "============================================="
-echo "   OpenCode Ledger Plugin Installer v0.0.4"
+echo "   OpenCode Ledger Plugin Installer/Upgrader v0.0.5"
 echo "============================================="
 echo ""
 
@@ -15,32 +15,44 @@ echo ""
 mkdir -p "$DEST_DIR"
 
 # 2. Download index.ts to plugins/ledger.ts
-echo "Downloading ledger plugin to $DEST_FILE..."
+echo "Downloading or updating ledger plugin at $DEST_FILE..."
+timestamp="$(date +%Y%m%d%H%M%S)"
+tmp_file="$(mktemp "$DEST_DIR/ledger.ts.tmp.XXXXXX")"
+trap 'rm -f "$tmp_file"' EXIT
+
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL "$RAW_URL" -o "$DEST_FILE"
+  curl -fsSL "$RAW_URL" -o "$tmp_file"
 elif command -v wget >/dev/null 2>&1; then
-  wget -qO "$DEST_FILE" "$RAW_URL"
+  wget -qO "$tmp_file" "$RAW_URL"
 else
   echo "❌ Error: Neither curl nor wget was found. Cannot download plugin."
   exit 1
 fi
 
-echo "✅ Downloaded ledger plugin successfully."
+if [ -f "$DEST_FILE" ]; then
+  plugin_backup="$DEST_FILE.bak.$timestamp"
+  cp "$DEST_FILE" "$plugin_backup"
+  echo "✅ Backed up existing plugin: $plugin_backup"
+fi
+
+mv "$tmp_file" "$DEST_FILE"
+trap - EXIT
+echo "✅ Downloaded/updated ledger plugin successfully."
 echo ""
 
 # 3. Prompt user to enable the plugin automatically
 # If stderr is a terminal, we have a user. Check if we should read from stdin or /dev/tty (for piped curl | sh)
 if [ -t 2 ]; then
   if [ -t 0 ]; then
-    read -p "Do you want to automatically enable the ledger plugin in your OpenCode configuration files? (y/n): " confirm
+    read -p "Do you want to automatically enable/update the ledger plugin in your OpenCode configuration files? (y/n): " confirm
   elif [ -c /dev/tty ] && { true < /dev/tty; } 2>/dev/null; then
-    read -p "Do you want to automatically enable the ledger plugin in your OpenCode configuration files? (y/n): " confirm < /dev/tty
+    read -p "Do you want to automatically enable/update the ledger plugin in your OpenCode configuration files? (y/n): " confirm < /dev/tty
   else
-    read -p "Do you want to automatically enable the ledger plugin in your OpenCode configuration files? (y/n): " confirm
+    read -p "Do you want to automatically enable/update the ledger plugin in your OpenCode configuration files? (y/n): " confirm
   fi
 else
   # Non-interactive execution (CI/tests/background runner), read from stdin
-  read -p "Do you want to automatically enable the ledger plugin in your OpenCode configuration files? (y/n): " confirm
+  read -p "Do you want to automatically enable/update the ledger plugin in your OpenCode configuration files? (y/n): " confirm
 fi
 
 if [[ "$confirm" =~ ^[Yy]$ ]]; then
@@ -59,6 +71,7 @@ const destFile = process.env.LEDGER_DEST_FILE || path.join(opencodeDir, 'plugins
 const newItem = pathToFileURL(destFile).href;
 const obsoleteItems = new Set(['./plugins/ledger.ts', destFile]);
 const ledgerCommandTemplate = 'Use ledger tool. Return only output.';
+const backupStamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
 
 function quoted(value) {
   return JSON.stringify(value);
@@ -165,6 +178,7 @@ function findTopLevelProperty(content, property, openChar) {
       depth -= 1;
       if (depth === 0) {
         return {
+          propertyIndex: match.index,
           openIndex,
           closeIndex: index,
         };
@@ -179,8 +193,7 @@ function ledgerCommandEntry(indent) {
   return [
     indent + '"ledger": {',
     indent + '  "template": ' + quoted(ledgerCommandTemplate) + ',',
-    indent + '  "description": "Show multi-agent token and cost ledger",',
-    indent + '  "subtask": true',
+    indent + '  "description": "Show multi-agent token and cost ledger"',
     indent + '}',
   ].join('\n');
 }
@@ -190,7 +203,20 @@ function ensureLedgerCommand(content) {
 
   if (commandObject) {
     const body = content.slice(commandObject.openIndex + 1, commandObject.closeIndex);
-    if (/"ledger"\s*:/.test(body)) return content;
+    if (/"ledger"\s*:/.test(body)) {
+      const ledgerObject = findTopLevelProperty(body, 'ledger', '{');
+      if (!ledgerObject) return content;
+
+      const lineStart = body.lastIndexOf('\n', ledgerObject.propertyIndex) + 1;
+      const indent = body.slice(lineStart, ledgerObject.propertyIndex).match(/^\s*/)?.[0] || '    ';
+      const updatedBody = body.slice(0, ledgerObject.propertyIndex)
+        + ledgerCommandEntry(indent)
+        + body.slice(ledgerObject.closeIndex + 1);
+
+      return content.slice(0, commandObject.openIndex + 1)
+        + updatedBody
+        + content.slice(commandObject.closeIndex);
+    }
 
     const updatedBody = body.trim().length === 0
       ? '\n' + ledgerCommandEntry('    ') + '\n  '
@@ -204,11 +230,20 @@ function ensureLedgerCommand(content) {
   return content.replace(/^(\s*\{)/, '$1\n  "command": {\n' + ledgerCommandEntry('    ') + '\n  },');
 }
 
-function updateConfig(filePath) {
-  const backupPath = filePath + '.bak';
+function backupFile(filePath) {
+  let backupPath = filePath + '.bak.' + backupStamp;
+  let counter = 1;
+
+  while (fs.existsSync(backupPath)) {
+    backupPath = filePath + '.bak.' + backupStamp + '.' + counter;
+    counter += 1;
+  }
+
   fs.copyFileSync(filePath, backupPath);
   console.log('✅ Created backup: ' + backupPath);
+}
 
+function updateConfig(filePath) {
   let content = fs.readFileSync(filePath, 'utf8');
   const pluginArray = findPluginArray(content);
 
@@ -225,6 +260,7 @@ function updateConfig(filePath) {
 
   content = ensureLedgerCommand(content);
 
+  backupFile(filePath);
   fs.writeFileSync(filePath, content, 'utf8');
   console.log('✅ Enabled ledger plugin in ' + path.basename(filePath) + ' as ' + newItem);
   console.log('✅ Enabled /ledger command in ' + path.basename(filePath));
@@ -245,7 +281,6 @@ if (existingConfigs.length === 0) {
       ledger: {
         template: ledgerCommandTemplate,
         description: 'Show multi-agent token and cost ledger',
-        subtask: true,
       },
     },
   }, null, 2) + '\n';
@@ -272,7 +307,7 @@ if (existingConfigs.length === 0) {
 }
 NODE
   echo ""
-  echo "🎉 Setup complete! Restart OpenCode to start tracking token costs."
+  echo "🎉 Setup/upgrade complete! Restart OpenCode to use the latest ledger."
 else
   echo ""
   echo "Skipped auto-configuration."
@@ -284,8 +319,7 @@ else
   echo "  \"command\": {"
   echo "    \"ledger\": {"
   echo "      \"template\": \"Use ledger tool. Return only output.\","
-  echo "      \"description\": \"Show multi-agent token and cost ledger\","
-  echo "      \"subtask\": true"
+  echo "      \"description\": \"Show multi-agent token and cost ledger\""
   echo "    }"
   echo "  }"
   echo ""

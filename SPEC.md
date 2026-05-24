@@ -1,11 +1,12 @@
 # Ledger Plugin - Technical Specification
 
 ## Overview
-**Agent Ledger** is an OpenCode plugin that provides detailed, multi-agent token and cost tracking. It was built specifically for users running complex multi-agent workflows (such as `oh-my-openagent`) where multiple agents may use different (or the same) providers and models.
+**Agent Ledger** is an OpenCode plugin that provides detailed, multi-agent token and cost tracking. It was built for durable OpenCode sessions that may spawn child/background agent sessions, where `/ledger` should report the active session tree by agent, provider, and model.
 
 ## Core Features
 - Tracks usage **by individual agent + provider + model**
-- Per-session tracking (automatically resets on new session)
+- Reads persisted OpenCode session history
+- Per-session-tree reporting for the active session and descendant background sessions
 - Real-time cost estimation with editable pricing map
 - Compact toast summary on session idle
 - Full detailed ledger via `/ledger` command
@@ -14,16 +15,20 @@
 ## Architecture
 
 ### Data Structure
-- Uses `Map<string, UsageEntry>` where key = `agent::provider:model`
-- `UsageEntry` contains: agent, provider, model, promptTokens, completionTokens, totalTokens, estimatedCost, calls
+- Uses OpenCode's own persisted session messages as the source of truth
+- Resolves the active session tree from `client.session.children(...)`, with in-memory parent links as a fallback while OpenCode is running
+- Builds user-message contexts by message ID so assistant responses can inherit the originating agent/provider/model
+- Prefers `step-finish` part usage over assistant message usage when parts are present
+- `UsageEntry` totals are derived at report time instead of stored as the source of truth
 
 ### Lifecycle Hooks Used
-- `session.created` → Clear usage map and log reset
-- `message.updated` → Detect assistant messages and extract agent/provider/model + usage data
+- `session.created` → Remember parent relationship fallback
+- `session.updated` → Track parent relationship updates
 - `session.idle` → Show compact toast summary
 
 ### Custom Tool
 - `ledger` → Slash command `/ledger` that displays the full grouped report
+- The tool itself is deterministic and does not call an LLM, but OpenCode command templates may route `/ledger` through the assistant before tool execution.
 
 ### Pricing
 - Configurable pricing map inside `index.ts`
@@ -41,14 +46,12 @@ The plugin attempts to extract data from common locations in the `message` objec
 Same flexible approach is used for provider and model.
 
 ## Limitations (Current)
-- Does not yet persist usage across OpenCode restarts
 - TUI header integration (showing live summary below context counter) is not possible with current OpenCode plugin API
 - Pricing must be manually updated in code
+- The sample `/ledger` slash command is command-template based, so a fully native non-LLM command depends on OpenCode exposing a direct command response API.
 
 ## Future Improvements (Roadmap)
 - Configurable pricing via `opencode.json`
 - JSON export at session end
-- Persistent storage option
 - Per-agent subtotals in compact toast
 - Better TUI status integration when OpenCode adds status bar hooks
-
